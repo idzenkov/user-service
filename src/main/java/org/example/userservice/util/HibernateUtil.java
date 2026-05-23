@@ -16,8 +16,6 @@ public class HibernateUtil {
         try {
             // Загружаем конфигурацию из hibernate.cfg.xml
             Configuration configuration = new Configuration().configure();
-            // Можно явно добавить аннотированный класс (но configure() прочитает отображения из XML,
-            // лучше добавить программно, чтобы избежать ошибок)
             configuration.addAnnotatedClass(org.example.userservice.entity.User.class);
             return configuration.buildSessionFactory();
         } catch (Throwable ex) {
