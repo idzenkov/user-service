@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.example.userservice.client.NotificationClient;
 import org.example.userservice.dto.CreateUserRequest;
 import org.example.userservice.dto.UpdateUserRequest;
 import org.example.userservice.dto.UserDto;
@@ -25,9 +26,11 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
 public class UserController {
 
     private final UserService userService;
+    private final NotificationClient notificationClient;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, NotificationClient notificationClient) {
         this.userService = userService;
+        this.notificationClient = notificationClient;
     }
 
     @PostMapping
@@ -100,5 +103,11 @@ public class UserController {
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/health/notification")
+    public ResponseEntity<String> checkNotification() {
+        String result = notificationClient.checkNotificationHealth();
+        return ResponseEntity.ok(result);
     }
 }
