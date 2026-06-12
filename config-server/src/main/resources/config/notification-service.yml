@@ -1,0 +1,28 @@
+server:
+  port: 8082   # или 8081? У тебя был 8081, но чтобы не конфликтовало с user-service, лучше 8082
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: notification-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.value.default.type: org.example.notificationservice.dto.UserEvent
+        spring.json.trusted.packages: org.example.notificationservice.dto
+  mail:
+    host: localhost
+    port: 1025
+    username: dummy
+    password: dummy
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
