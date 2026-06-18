@@ -1,44 +1,147 @@
 services:
-  kafka:
-    image: apache/kafka:latest
-    container_name: kafka-broker
-    ports:
-      - "9092:9092"
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
     environment:
+      POSTGRES_DB: userdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: apache/kafka:3.7.1
+    container_name: kafka
+    environment:
+
       KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: 'controller,broker'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:9093'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      KAFKA_LISTENERS: 'PLAINTEXT://:19092,PLAINTEXT_HOST://:9092,CONTROLLER://:9093'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:19092,PLAINTEXT_HOST://localhost:9092'
-      KAFKA_LOG_DIRS: '/var/lib/kafka/data'
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-      KAFKA_HEAP_OPTS: '-Xmx512M -Xms512M'
-    volumes:
-      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "9092:9092"
+    networks:
+      - app-network
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      test: [ "CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list" ]
       interval: 10s
       timeout: 10s
       retries: 5
 
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mailhog
     ports:
-      - "8082:8080"
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - app-network
+
+  config-server:
+    build:
+      context: .
+      args:
+        MODULE_NAME: config-server
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8888/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  discovery-server:
+    build:
+      context: .
+      args:
+        MODULE_NAME: discovery-server
+    container_name: discovery-server
+    ports:
+      - "8761:8761"
+    networks:
+      - app-network
+    depends_on:
+      config-server:
+        condition: service_healthy
+
+
+  user-service:
+    build:
+      context: .
+      args:
+        MODULE_NAME: user-service
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+
+  notification-service:
+    build:
+      context: .
+      args:
+        MODULE_NAME: notification-service
+    container_name: notification-service
+    ports:
+      - "8082:8082"
+    networks:
+      - app-network
     depends_on:
       kafka:
         condition: service_healthy
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
-      KAFKA_CLUSTERS_0_JMXPORT: 9997
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+
+  gateway-server:
+    build:
+      context: .
+      args:
+        MODULE_NAME: gateway-server
+    container_name: gateway-server
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    depends_on:
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
 
 volumes:
-  kafka_data:
+  postgres-data:
+  kafka-data:
+
+networks:
+  app-network:
+    driver: bridge
