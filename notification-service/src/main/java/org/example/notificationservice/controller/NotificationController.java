@@ -1,6 +1,7 @@
 package org.example.notificationservice.controller;
 
 import org.example.notificationservice.service.EmailService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,5 +19,10 @@ public class NotificationController {
                           @RequestParam String subject,
                           @RequestParam String text) {
         emailService.sendEmail(to, subject, text);
+    }
+
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("Notification service is healthy");
     }
 }
